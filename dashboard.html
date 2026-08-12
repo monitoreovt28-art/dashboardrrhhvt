@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Telemetría — SDS, Premio & Telemetría</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+:root{
+  color-scheme: light;
+  --surface-1:#fcfcfb; --surface-2:#ffffff; --page:#f2f3f5;
+  --text-primary:#0b0b0b; --text-secondary:#52514e; --text-muted:#898781;
+  --grid:#e1e0d9; --baseline:#c3c2b7; --border:rgba(11,11,11,0.10);
+  --series-1:#2a78d6; --series-2:#eb6834; --series-3:#1baf7a; --series-4:#eda100;
+  --series-5:#e87ba4; --series-6:#008300; --series-7:#4a3aa7; --series-8:#e34948;
+  --good:#0ca30c; --warning:#fab219; --serious:#ec835a; --critical:#d03b3b;
+  --success-text:#006300;
+  --radius:12px;
+  --shadow:0 1px 2px rgba(11,11,11,.06), 0 4px 12px rgba(11,11,11,.06);
+}
+@media (prefers-color-scheme: dark){
+  :root:where(:not([data-theme="light"])){
+    color-scheme: dark;
+    --surface-1:#1a1a19; --surface-2:#212120; --page:#0d0d0d;
+    --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
+    --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
+    --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
+    --success-text:#0ca30c;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --surface-1:#1a1a19; --surface-2:#212120; --page:#0d0d0d;
+  --text-primary:#ffffff; --text-secondary:#c3c2b7; --text-muted:#898781;
+  --grid:#2c2c2a; --baseline:#383835; --border:rgba(255,255,255,0.10);
+  --series-1:#3987e5; --series-2:#d95926; --series-3:#199e70; --series-4:#c98500;
+  --series-5:#d55181; --series-6:#008300; --series-7:#9085e9; --series-8:#e66767;
+  --success-text:#0ca30c;
+}
+*{box-sizing:border-box;}
+body{
+  margin:0; background:var(--page); color:var(--text-primary);
+  font-family: Inter, "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+.topbar{
+  position:sticky; top:0; z-index:50;
+  background:var(--surface-1); border-bottom:1px solid var(--border);
+  box-shadow:var(--shadow);
+  padding:10px 20px;
+}
+.topbar-inner{
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  max-width:1600px; margin:0 auto;
+}
+.brand{
+  font-weight:700; font-size:16px; margin-right:8px; white-space:nowrap;
+}
+.brand span{color:var(--series-1);}
+.filters{
+  display:flex; gap:10px; flex-wrap:wrap; flex:1;
+}
+.multiselect{position:relative; min-width:190px;}
+.ms-btn{
+  width:100%; text-align:left; background:var(--surface-2);
+  border:1px solid var(--border); border-radius:8px; padding:8px 12px;
+  color:var(--text-primary); font-size:13px; cursor:pointer;
+  display:flex; justify-content:space-between; align-items:center; gap:8px;
+}
+.ms-btn:hover{border-color:var(--series-1);}
+.ms-btn small{color:var(--text-muted); font-weight:400;}
+.ms-panel{
+  display:none; position:absolute; top:calc(100% + 6px); left:0;
+  min-width:230px; max-height:320px; overflow-y:auto;
+  background:var(--surface-2); border:1px solid var(--border);
+  border-radius:10px; box-shadow:var(--shadow); padding:8px; z-index:100;
+}
+.ms-panel.open{display:block;}
+.ms-search{
+  width:100%; padding:6px 8px; margin-bottom:6px; border-radius:6px;
+  border:1px solid var(--border); background:var(--surface-1); color:var(--text-primary); font-size:12px;
+}
+.ms-option{
+  display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:6px;
+  font-size:13px; cursor:pointer;
+}
+.ms-option:hover{background:var(--page);}
+.ms-option input{accent-color:var(--series-1);}
+.ms-actions{display:flex; gap:6px; margin-top:6px; border-top:1px solid var(--border); padding-top:6px;}
+.ms-actions button{
+  flex:1; font-size:11px; padding:4px; border-radius:6px; border:1px solid var(--border);
+  background:var(--surface-1); color:var(--text-secondary); cursor:pointer;
+}
+.ms-actions button:hover{color:var(--text-primary); border-color:var(--series-1);}
+.file-controls{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.btn{
+  background:var(--series-1); color:#fff; border:none; border-radius:8px;
+  padding:8px 14px; font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap;
+}
+.btn:hover{filter:brightness(1.08);}
+.btn.secondary{background:var(--surface-2); color:var(--text-primary); border:1px solid var(--border);}
+.gh-url{
+  padding:8px 10px; border-radius:8px; border:1px solid var(--border);
+  background:var(--surface-2); color:var(--text-primary); font-size:12px; width:230px;
+}
+#fileStatus{font-size:12px; color:var(--text-muted);}
+main{max-width:1600px; margin:0 auto; padding:20px;}
+.section{
+  background:var(--surface-1); border:1px solid var(--border); border-radius:var(--radius);
+  box-shadow:var(--shadow); padding:18px 20px; margin-bottom:22px;
+}
+.section-title{
+  font-size:16px; font-weight:700; margin:0 0 4px 0; display:flex; align-items:center; gap:8px;
+}
+.section-title .tag{
+  font-size:11px; font-weight:600; color:var(--text-muted); background:var(--page);
+  border:1px solid var(--border); padding:2px 8px; border-radius:20px;
+}
+.section-sub{font-size:12px; color:var(--text-secondary); margin:0 0 16px 0;}
+.grid{display:grid; gap:16px;}
+.grid-2{grid-template-columns:2fr 1fr;}
+.grid-3{grid-template-columns:repeat(3,1fr);}
+.grid-4{grid-template-columns:repeat(4,1fr);}
+@media(max-width:1100px){.grid-2,.grid-3,.grid-4{grid-template-columns:1fr;}}
+.card{
+  background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px;
+}
+.chart-wrap{position:relative; height:320px;}
+.chart-wrap.small{height:240px;}
+.toggle-row{display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center;}
+.pill{
+  padding:6px 12px; border-radius:20px; border:1px solid var(--border);
+  background:var(--surface-2); font-size:12px; cursor:pointer; color:var(--text-secondary);
+}
+.pill.active{background:var(--series-1); color:#fff; border-color:var(--series-1);}
+select.driverPick{
+  padding:6px 10px; border-radius:8px; border:1px solid var(--border);
+  background:var(--surface-2); color:var(--text-primary); font-size:12px;
+}
+.kpi-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:6px;}
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(2,1fr);}}
+.kpi{
+  background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:14px;
+}
+.kpi-label{font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:6px;}
+.kpi-value{font-size:22px; font-weight:700; line-height:1.2;}
+.kpi-value small{font-size:12px; font-weight:500; color:var(--text-secondary);}
+.kpi-sub{font-size:12px; color:var(--text-secondary); margin-top:4px;}
+.delta{font-weight:700;}
+.delta.up{color:var(--success-text);}
+.delta.down{color:var(--critical);}
+.delta.flat{color:var(--text-muted);}
+table.data-table{width:100%; border-collapse:collapse; font-size:13px;}
+table.data-table th{
+  text-align:left; padding:8px 10px; color:var(--text-muted); font-weight:600;
+  border-bottom:1px solid var(--grid); font-size:11px; text-transform:uppercase; letter-spacing:.03em;
+}
+table.data-table td{padding:8px 10px; border-bottom:1px solid var(--grid); font-variant-numeric:tabular-nums;}
+table.data-table tr:last-child td{border-bottom:none;}
+.legend-note{font-size:11px; color:var(--text-muted); margin-top:8px;}
+.empty-state{
+  text-align:center; padding:60px 20px; color:var(--text-secondary);
+}
+.empty-state h2{color:var(--text-primary);}
+.theme-toggle{
+  background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:8px 10px; cursor:pointer; font-size:13px; color:var(--text-primary);
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">Dashboard <span>Telemetría</span></div>
+    <div class="filters">
+      <div class="multiselect" id="ms-chofer">
+        <button class="ms-btn" type="button"><span id="ms-chofer-label">Chofer: Todos</span><small>▾</small></button>
+        <div class="ms-panel">
+          <input type="text" class="ms-search" placeholder="Buscar chofer...">
+          <div class="ms-options"></div>
+          <div class="ms-actions">
+            <button data-act="all">Todos</button>
+            <button data-act="none">Ninguno</button>
+          </div>
+        </div>
+      </div>
+      <div class="multiselect" id="ms-camion">
+        <button class="ms-btn" type="button"><span id="ms-camion-label">Camión: Todos</span><small>▾</small></button>
+        <div class="ms-panel">
+          <input type="text" class="ms-search" placeholder="Buscar patente...">
+          <div class="ms-options"></div>
+          <div class="ms-actions">
+            <button data-act="all">Todos</button>
+            <button data-act="none">Ninguno</button>
+          </div>
+        </div>
+      </div>
+      <div class="multiselect" id="ms-mes">
+        <button class="ms-btn" type="button"><span id="ms-mes-label">Meses: Todos</span><small>▾</small></button>
+        <div class="ms-panel">
+          <input type="text" class="ms-search" placeholder="Buscar mes...">
+          <div class="ms-options"></div>
+          <div class="ms-actions">
+            <button data-act="all">Todos</button>
+            <button data-act="none">Ninguno</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="file-controls">
+      <input type="text" class="gh-url" id="ghUrl" placeholder="URL Raw GitHub (.xlsx/.xlsm)">
+      <button class="btn secondary" id="loadGhBtn">Cargar desde URL</button>
+      <button class="btn" id="loadFileBtn">Cargar Excel local</button>
+      <input type="file" id="fileInput" accept=".xlsx,.xlsm,.xls" style="display:none;">
+      <span id="fileStatus">Sin datos cargados</span>
+      <button class="theme-toggle" id="themeToggle" title="Cambiar tema">🌓</button>
+    </div>
+  </div>
+</div>
+
+<main id="mainContent">
+  <div class="empty-state" id="emptyState">
+    <h2>No hay datos cargados</h2>
+    <p>Cargá un archivo Excel (.xlsx/.xlsm) desde tu computadora, o pegá la URL Raw de GitHub y presioná "Cargar desde URL".</p>
+    <p style="font-size:12px; max-width:640px; margin:12px auto;">
+      Formato esperado (una fila por chofer/camión/mes): columnas como
+      <code>Chofer, Patente/Camion, Fecha (o Mes/Año), SDS_Puntos, Premio_Puntaje,
+      Ralenti_Litros, Ralenti_Horas, Ralenti_Horas_Permitidas, Ralenti_Pct, Embalamiento_Pct</code>.
+      El parser detecta variantes comunes de estos nombres automáticamente.
+    </p>
+  </div>
+
+  <div id="dashboardContent" style="display:none;">
+
+    <section class="section">
+      <h3 class="section-title">Evolución SDS y Premio <span class="tag">Sección 1</span></h3>
+      <p class="section-sub">Tendencia mensual de puntos descontados SDS y puntaje de premio.</p>
+
+      <div class="toggle-row">
+        <button class="pill active" data-scope="flota">Flota completa</button>
+        <button class="pill" data-scope="chofer">Chofer específico</button>
+        <select class="driverPick" id="scopeDriverSelect" style="display:none;"></select>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div class="chart-wrap"><canvas id="chartSdsPremio"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="kpi-grid" style="grid-template-columns:1fr;">
+            <div class="kpi">
+              <div class="kpi-label">Mejor conductor (Premio)</div>
+              <div class="kpi-value" id="kpiBestDriver">—</div>
+            </div>
+            <div class="kpi">
+              <div class="kpi-label">Peor conductor (Premio)</div>
+              <div class="kpi-value" id="kpiWorstDriver">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kpi-grid" style="margin-top:16px;">
+        <div class="kpi">
+          <div class="kpi-label">Mejor mes (SDS/Premio flota)</div>
+          <div class="kpi-value" id="kpiBestMonth">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Peor mes (SDS/Premio flota)</div>
+          <div class="kpi-value" id="kpiWorstMonth">—</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Var. SDS vs mes anterior</div>
+          <div class="kpi-value" id="kpiVarSds">—</div>
+          <div class="kpi-sub" id="kpiVarSdsSub"></div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-label">Var. Premio vs mes anterior</div>
+          <div class="kpi-value" id="kpiVarPremio">—</div>
+          <div class="kpi-sub" id="kpiVarPremioSub"></div>
+        </div>
+      </div>
+      <div class="legend-note">La variación y los "mejor/peor mes" se recalculan según el toggle Flota/Chofer de arriba.</div>
+    </section>
+
+    <section class="section">
+      <h3 class="section-title">Telemetría y Control de Ralentí <span class="tag">Sección 2</span></h3>
+      <p class="section-sub">Consumo en ralentí, horas reales vs permitidas y evolución del % de ralentí.</p>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Top 5 — Litros consumidos en ralentí</div>
+          <div class="chart-wrap small"><canvas id="chartTopRalenti"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Top 5 — detalle</div>
+          <div style="overflow-x:auto;">
+            <table class="data-table" id="tableTopRalenti">
+              <thead><tr><th>#</th><th>Chofer</th><th>Camión</th><th>Litros</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-2" style="margin-top:16px;">
+        <div class="card">
+          <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Ralentí — Horas reales vs permitidas (h:mm)</div>
+          <div class="chart-wrap"><canvas id="chartRalentiHoras"></canvas></div>
+        </div>
+        <div class="card">
+          <div style="font-size:13px; font-weight:600; margin-bottom:8px;">Evolución % Ralentí promedio</div>
+          <div class="chart-wrap"><canvas id="chartRalentiPct"></canvas></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h3 class="section-title">Control de Embalamiento <span class="tag">Sección 3</span></h3>
+      <p class="section-sub">Evolución del % promedio de eventos de embalamiento vs. límite máximo permitido (0.5%).</p>
+      <div class="card">
+        <div class="chart-wrap"><canvas id="chartEmbalamiento"></canvas></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN
+   ============================================================ */
+const CONFIG = {
+  // Pegar aquí la URL Raw de GitHub del archivo .xlsx/.xlsm por defecto (opcional)
+  GITHUB_RAW_URL: "",
+  RALENTI_HORAS_PERMITIDAS_DEFAULT: 1.0, // horas, usado si el excel no trae la columna
+  EMBALAMIENTO_LIMITE: 0.5 // % límite máximo permitido
+};
+
+/* ============================================================
+   ESTADO GLOBAL
+   ============================================================ */
+let RAW_ROWS = [];       // filas normalizadas
+let DRIVERS = [];
+let TRUCKS = [];
+let MONTHS = [];          // {key:'2026-03', label:'Mar 2026', y, m}
+let SELECTED = { choferes:new Set(), camiones:new Set(), meses:new Set() };
+let SCOPE = 'flota';      // 'flota' | 'chofer'
+let SCOPE_DRIVER = null;
+let CHARTS = {};
+
+const MONTH_NAMES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+/* ============================================================
+   THEME TOGGLE
+   ============================================================ */
+document.getElementById('themeToggle').addEventListener('click', ()=>{
+  const root = document.documentElement;
+  const cur = root.getAttribute('data-theme');
+  if(cur === 'dark'){ root.setAttribute('data-theme','light'); }
+  else if(cur === 'light'){ root.removeAttribute('data-theme'); }
+  else { root.setAttribute('data-theme','dark'); }
+  renderAll();
+});
+
+/* ============================================================
+   CARGA DE ARCHIVO
+   ============================================================ */
+document.getElementById('loadFileBtn').addEventListener('click', ()=> document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e)=>{
+  const f = e.target.files[0];
+  if(!f) return;
+  setStatus('Leyendo ' + f.name + '...');
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, {type:'array', cellDates:true});
+      processWorkbook(wb, f.name);
+    }catch(err){
+      setStatus('Error al leer el archivo: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(f);
+});
+
+document.getElementById('loadGhBtn').addEventListener('click', ()=>{
+  const url = document.getElementById('ghUrl').value.trim() || CONFIG.GITHUB_RAW_URL;
+  if(!url){ setStatus('Ingresá una URL Raw de GitHub'); return; }
+  loadFromUrl(url);
+});
+
+function loadFromUrl(url){
+  setStatus('Descargando desde GitHub...');
+  fetch(url)
+    .then(r=>{ if(!r.ok) throw new Error('HTTP ' + r.status); return r.arrayBuffer(); })
+    .then(buf=>{
+      const wb = XLSX.read(new Uint8Array(buf), {type:'array', cellDates:true});
+      processWorkbook(wb, url.split('/').pop());
+    })
+    .catch(err=>{
+      setStatus('Error al descargar: ' + err.message);
+      console.error(err);
+    });
+}
+
+function setStatus(msg){ document.getElementById('fileStatus').textContent = msg; }
+
+if(CONFIG.GITHUB_RAW_URL){
+  document.getElementById('ghUrl').value = CONFIG.GITHUB_RAW_URL;
+}
+
+/* ============================================================
+   PARSEO Y NORMALIZACIÓN
+   ============================================================ */
+function normalizeKey(k){
+  return String(k).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]/g,'');
+}
+
+const FIELD_ALIASES = {
+  chofer: ['chofer','conductor','driver','nombrechofer'],
+  camion: ['camion','patente','vehiculo','unidad','truck','patenteid','movil'],
+  fecha: ['fecha','fechaevento','fechainicio','date','periodo'],
+  anio: ['anio','ano','year'],
+  mes: ['mes','month'],
+  sds: ['sdspuntos','sds','puntossds','puntosdescontados','puntosdescontadossds','sdsdescontado'],
+  premio: ['premiopuntaje','premio','puntajepremio','puntopremio','puntajedepremio'],
+  ralentiLitros: ['ralentilitros','litrosralenti','ralentilts','litrosenralenti'],
+  ralentiHoras: ['ralentihoras','horasralenti','ralentihs','horasenralenti','ralentihmin'],
+  ralentiHorasPermitidas: ['ralentihoraspermitidas','horaspermitidas','horaspermitidasralenti','ralentipermitido','hspermralenti'],
+  ralentiPct: ['ralentipct','pctralenti','porcentajeralenti','ralenti'],
+  embalamientoPct: ['embalamientopct','pctembalamiento','porcentajeembalamiento','embalamiento']
+};
+
+function matchField(normKey){
+  for(const [field, aliases] of Object.entries(FIELD_ALIASES)){
+    if(aliases.includes(normKey)) return field;
+  }
+  return null;
+}
+
+function toNumber(v){
+  if(v === null || v === undefined || v === '') return null;
+  if(typeof v === 'number') return v;
+  let s = String(v).trim();
+  if(s === '') return null;
+  s = s.replace(/[^\d,.\-]/g,'');
+  if(s.includes(',') && s.includes('.')){
+    if(s.lastIndexOf(',') > s.lastIndexOf('.')){ s = s.replace(/\./g,'').replace(',','.'); }
+    else{ s = s.replace(/,/g,''); }
+  } else if(s.includes(',')){ s = s.replace(',','.'); }
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+function parseHoursValue(v, isDayFraction){
+  // isDayFraction: true when a plain numeric value represents a fraction/multiple of a day
+  // (Excel's [h]:mm duration storage, e.g. 1.5 => 36 hours) rather than hours already.
+  if(v === null || v === undefined || v === '') return null;
+  if(v instanceof Date && !isNaN(v)) return v.getHours() + v.getMinutes()/60 + v.getSeconds()/3600;
+  if(typeof v === 'string'){
+    // tolerate malformed duration text like "44::00:00" (double colon typo)
+    const m = v.trim().match(/^(\d+):+(\d{1,2})(?::+(\d{1,2}))?$/);
+    if(m) return parseInt(m[1],10) + parseInt(m[2],10)/60 + (m[3]?parseInt(m[3],10)/3600:0);
+  }
+  const n = toNumber(v);
+  if(n === null) return null;
+  return isDayFraction ? n*24 : n;
+}
+
+function parseDateParts(row, fieldsFound){
+  let y=null, m=null;
+  const rawDate = row._fecha;
+  if(rawDate instanceof Date && !isNaN(rawDate)){
+    y = rawDate.getFullYear(); m = rawDate.getMonth()+1;
+  } else if(rawDate){
+    const n = toNumber(rawDate);
+    if(n && n > 20000 && n < 60000){
+      const d = XLSX.SSF ? XLSX.SSF.parse_date_code(n) : null;
+      if(d){ y = d.y; m = d.m; }
+    } else {
+      const s = String(rawDate);
+      const mdy = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+      const ymd = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+      if(ymd){ y = parseInt(ymd[1]); m = parseInt(ymd[2]); }
+      else if(mdy){ y = parseInt(mdy[3].length===2 ? '20'+mdy[3] : mdy[3]); m = parseInt(mdy[2]); }
+    }
+  }
+  if((!y || !m) && row._anio && row._mes){
+    y = parseInt(toNumber(row._anio));
+    let mm = row._mes;
+    const mn = toNumber(mm);
+    if(mn) m = mn;
+    else{
+      const idx = MONTH_NAMES.findIndex(n => String(mm).toLowerCase().startsWith(n.toLowerCase()));
+      if(idx>=0) m = idx+1;
+    }
+  }
+  return {y, m};
+}
+
+function pickDataSheet(wb){
+  // Prefer a sheet literally named like "Historico"/"Historial"/"Data", else the sheet
+  // with the most non-empty rows (control/summary tabs like "Panel" tend to have few rows).
+  const preferred = wb.SheetNames.find(n => /hist[oó]ric|data|datos/i.test(n));
+  if(preferred) return preferred;
+  let best = wb.SheetNames[0], bestCount = -1;
+  wb.SheetNames.forEach(n=>{
+    const json = XLSX.utils.sheet_to_json(wb.Sheets[n], {defval:null, raw:true});
+    if(json.length > bestCount){ bestCount = json.length; best = n; }
+  });
+  return best;
+}
+
+function processWorkbook(wb, filename){
+  const sheetName = pickDataSheet(wb);
+  const ws = wb.Sheets[sheetName];
+  const json = XLSX.utils.sheet_to_json(ws, {defval:null, raw:true});
+  if(!json.length){ setStatus('El archivo no contiene filas de datos'); return; }
+
+  const headerMap = {};
+  Object.keys(json[0]).forEach(k=>{
+    const norm = normalizeKey(k);
+    const field = matchField(norm);
+    if(field) headerMap[k] = field;
+  });
+
+  const rows = [];
+  json.forEach(r=>{
+    const row = {};
+    Object.entries(headerMap).forEach(([orig, field])=>{
+      if(field === 'fecha') row._fecha = r[orig];
+      else if(field === 'anio') row._anio = r[orig];
+      else if(field === 'mes') row._mes = r[orig];
+      else row[field] = r[orig];
+    });
+    const {y,m} = parseDateParts(row);
+    if(!y || !m) return;
+    rows.push({
+      chofer: row.chofer ? String(row.chofer).trim() : 'Sin dato',
+      camion: row.camion ? String(row.camion).trim() : 'Sin dato',
+      year: y, month: m,
+      monthKey: y + '-' + String(m).padStart(2,'0'),
+      sds: toNumber(row.sds) ?? 0,
+      premio: toNumber(row.premio) ?? 0,
+      ralentiLitros: toNumber(row.ralentiLitros) ?? 0,
+      ralentiHoras: parseHoursValue(row.ralentiHoras, true) ?? 0,
+      ralentiHorasPermitidas: parseHoursValue(row.ralentiHorasPermitidas, false) ?? CONFIG.RALENTI_HORAS_PERMITIDAS_DEFAULT,
+      ralentiPct: toNumber(row.ralentiPct) ?? 0,
+      embalamientoPct: toNumber(row.embalamientoPct) ?? 0
+    });
+  });
+
+  if(!rows.length){
+    setStatus('No se pudieron interpretar filas válidas (revisar columnas de fecha/mes).');
+    return;
+  }
+
+  RAW_ROWS = rows;
+  DRIVERS = [...new Set(rows.map(r=>r.chofer))].sort();
+  TRUCKS = [...new Set(rows.map(r=>r.camion))].sort();
+  const monthMap = new Map();
+  rows.forEach(r=>{
+    if(!monthMap.has(r.monthKey)) monthMap.set(r.monthKey, {key:r.monthKey, y:r.year, m:r.month, label: MONTH_NAMES[r.month-1] + ' ' + r.year});
+  });
+  MONTHS = [...monthMap.values()].sort((a,b)=> a.key.localeCompare(b.key));
+
+  SELECTED.choferes = new Set(DRIVERS);
+  SELECTED.camiones = new Set(TRUCKS);
+  SELECTED.meses = new Set(MONTHS.map(m=>m.key));
+
+  buildMultiselect('ms-chofer', DRIVERS, SELECTED.choferes, 'Chofer');
+  buildMultiselect('ms-camion', TRUCKS, SELECTED.camiones, 'Camión');
+  buildMultiselect('ms-mes', MONTHS.map(m=>({value:m.key,label:m.label})), SELECTED.meses, 'Meses');
+
+  populateDriverSelect();
+
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('dashboardContent').style.display = 'block';
+  setStatus(`Cargado: ${filename} (hoja "${sheetName}") — ${rows.length} filas, ${DRIVERS.length} choferes, ${TRUCKS.length} camiones, ${MONTHS.length} meses.`);
+
+  renderAll();
+}
+
+/* ============================================================
+   MULTISELECT COMPONENT
+   ============================================================ */
+function buildMultiselect(containerId, items, selectedSet, labelPrefix){
+  const container = document.getElementById(containerId);
+  const panel = container.querySelector('.ms-panel');
+  const optionsDiv = panel.querySelector('.ms-options');
+  const search = panel.querySelector('.ms-search');
+  const btn = container.querySelector('.ms-btn');
+  const labelSpan = container.querySelector('span');
+
+  const normItems = items.map(it => typeof it === 'object' ? it : {value:it, label:it});
+
+  function renderOptions(filter=''){
+    optionsDiv.innerHTML = '';
+    normItems.filter(it => it.label.toLowerCase().includes(filter.toLowerCase())).forEach(it=>{
+      const div = document.createElement('div');
+      div.className = 'ms-option';
+      const id = containerId + '-' + it.value;
+      div.innerHTML = `<input type="checkbox" id="${id}" ${selectedSet.has(it.value)?'checked':''}><label for="${id}" style="cursor:pointer;flex:1;">${it.label}</label>`;
+      const cb = div.querySelector('input');
+      cb.addEventListener('change', ()=>{
+        if(cb.checked) selectedSet.add(it.value); else selectedSet.delete(it.value);
+        updateLabel();
+        onFilterChange();
+      });
+      optionsDiv.appendChild(div);
+    });
+  }
+
+  function updateLabel(){
+    const total = normItems.length;
+    const sel = selectedSet.size;
+    labelSpan.textContent = sel === total ? `${labelPrefix}: Todos` : sel === 0 ? `${labelPrefix}: Ninguno` : `${labelPrefix}: ${sel} sel.`;
+  }
+
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    document.querySelectorAll('.ms-panel.open').forEach(p=>{ if(p!==panel) p.classList.remove('open'); });
+    panel.classList.toggle('open');
+  });
+  search.addEventListener('input', ()=> renderOptions(search.value));
+  panel.querySelectorAll('.ms-actions button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if(b.dataset.act === 'all') normItems.forEach(it=>selectedSet.add(it.value));
+      else selectedSet.clear();
+      renderOptions(search.value);
+      updateLabel();
+      onFilterChange();
+    });
+  });
+
+  renderOptions();
+  updateLabel();
+}
+
+document.addEventListener('click', ()=>{
+  document.querySelectorAll('.ms-panel.open').forEach(p=>p.classList.remove('open'));
+});
+document.querySelectorAll('.ms-panel').forEach(p=> p.addEventListener('click', e=>e.stopPropagation()));
+
+function onFilterChange(){
+  renderAll();
+}
+
+/* ============================================================
+   SCOPE TOGGLE (Flota vs Chofer) - Sección 1
+   ============================================================ */
+document.querySelectorAll('.toggle-row .pill').forEach(p=>{
+  p.addEventListener('click', ()=>{
+    document.querySelectorAll('.toggle-row .pill').forEach(x=>x.classList.remove('active'));
+    p.classList.add('active');
+    SCOPE = p.dataset.scope;
+    document.getElementById('scopeDriverSelect').style.display = SCOPE === 'chofer' ? 'inline-block' : 'none';
+    renderAll();
+  });
+});
+function populateDriverSelect(){
+  const sel = document.getElementById('scopeDriverSelect');
+  sel.innerHTML = DRIVERS.map(d=>`<option value="${d}">${d}</option>`).join('');
+  SCOPE_DRIVER = DRIVERS[0] || null;
+  sel.addEventListener('change', ()=>{ SCOPE_DRIVER = sel.value; renderAll(); });
+}
+
+/* ============================================================
+   DATA FILTERING HELPERS
+   ============================================================ */
+function getFilteredRows(){
+  return RAW_ROWS.filter(r =>
+    SELECTED.choferes.has(r.chofer) &&
+    SELECTED.camiones.has(r.camion) &&
+    SELECTED.meses.has(r.monthKey)
+  );
+}
+function getSelectedMonthsSorted(){
+  return MONTHS.filter(m => SELECTED.meses.has(m.key));
+}
+function css(varName){
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+function fmtNum(n, dec=1){
+  if(n===null||n===undefined||isNaN(n)) return '—';
+  return n.toLocaleString('es-AR', {minimumFractionDigits:dec, maximumFractionDigits:dec});
+}
+function hoursToHM(h){
+  if(h===null||h===undefined||isNaN(h)) return '—';
+  const sign = h<0 ? '-' : '';
+  h = Math.abs(h);
+  const hh = Math.floor(h);
+  const mm = Math.round((h-hh)*60);
+  return `${sign}${hh}:${String(mm).padStart(2,'0')}`;
+}
+
+/* ============================================================
+   RENDER ORCHESTRATOR
+   ============================================================ */
+function renderAll(){
+  if(!RAW_ROWS.length) return;
+  const rows = getFilteredRows();
+  const months = getSelectedMonthsSorted();
+  renderSdsPremioSection(rows, months);
+  renderRalentiSection(rows, months);
+  renderEmbalamientoSection(rows, months);
+}
+
+/* ============================================================
+   SECCIÓN 1: SDS Y PREMIO
+   ============================================================ */
+function aggregateByMonth(rows, months, driverFilter){
+  return months.map(mo=>{
+    const subset = rows.filter(r => r.monthKey===mo.key && (!driverFilter || r.chofer===driverFilter));
+    const sdsSum = subset.reduce((a,r)=>a+r.sds,0);
+    const premioSum = subset.reduce((a,r)=>a+r.premio,0);
+    const n = subset.length || 1;
+    return {
+      key:mo.key, label:mo.label,
+      sds: driverFilter ? sdsSum : sdsSum,
+      sdsAvg: sdsSum/n,
+      premio: driverFilter ? premioSum : premioSum,
+      premioAvg: premioSum/n
+    };
+  });
+}
+
+function renderSdsPremioSection(rows, months){
+  const driverFilter = SCOPE==='chofer' ? SCOPE_DRIVER : null;
+  const agg = aggregateByMonth(rows, months, driverFilter);
+
+  const ctx = document.getElementById('chartSdsPremio');
+  if(CHARTS.sdsPremio) CHARTS.sdsPremio.destroy();
+  CHARTS.sdsPremio = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: agg.map(a=>a.label),
+      datasets:[
+        {
+          label:'Puntos SDS descontados', data: agg.map(a=>a.sdsAvg),
+          borderColor: css('--series-1'), backgroundColor: css('--series-1'),
+          borderWidth:2, pointRadius:4, pointBackgroundColor:css('--series-1'),
+          tension:.25
+        },
+        {
+          label:'Puntaje Premio', data: agg.map(a=>a.premioAvg),
+          borderColor: css('--series-2'), backgroundColor: css('--series-2'),
+          borderWidth:2, pointRadius:4, pointBackgroundColor:css('--series-2'),
+          tension:.25
+        }
+      ]
+    },
+    options: baseLineOptions('Puntos (promedio)')
+  });
+
+  // KPI: mejor/peor conductor por premio promedio en el periodo
+  const byDriver = {};
+  rows.forEach(r=>{
+    if(!byDriver[r.chofer]) byDriver[r.chofer] = {sum:0,n:0};
+    byDriver[r.chofer].sum += r.premio; byDriver[r.chofer].n++;
+  });
+  const driverAvgs = Object.entries(byDriver).map(([d,v])=>({driver:d, avg:v.sum/v.n})).filter(d=>!isNaN(d.avg));
+  driverAvgs.sort((a,b)=> b.avg - a.avg);
+  const best = driverAvgs[0], worst = driverAvgs[driverAvgs.length-1];
+  document.getElementById('kpiBestDriver').innerHTML = best ? `${best.driver} <small>${fmtNum(best.avg)} pts</small>` : '—';
+  document.getElementById('kpiWorstDriver').innerHTML = worst ? `${worst.driver} <small>${fmtNum(worst.avg)} pts</small>` : '—';
+
+  // KPI: mejor/peor mes flota
+  const fleetAgg = aggregateByMonth(rows, months, null);
+  let bestMonth=null, worstMonth=null;
+  fleetAgg.forEach(a=>{
+    const score = a.premioAvg - a.sdsAvg;
+    if(!bestMonth || score > bestMonth.score) bestMonth = {...a, score};
+    if(!worstMonth || score < worstMonth.score) worstMonth = {...a, score};
+  });
+  document.getElementById('kpiBestMonth').innerHTML = bestMonth ? `${bestMonth.label} <small>Premio ${fmtNum(bestMonth.premioAvg)} / SDS ${fmtNum(bestMonth.sdsAvg)}</small>` : '—';
+  document.getElementById('kpiWorstMonth').innerHTML = worstMonth ? `${worstMonth.label} <small>Premio ${fmtNum(worstMonth.premioAvg)} / SDS ${fmtNum(worstMonth.sdsAvg)}</small>` : '—';
+
+  // KPI: variación mes vs mes anterior (según scope)
+  const last = agg[agg.length-1], prev = agg[agg.length-2];
+  renderDeltaKpi('kpiVarSds','kpiVarSdsSub', prev?.sdsAvg, last?.sdsAvg, 'pts SDS');
+  renderDeltaKpi('kpiVarPremio','kpiVarPremioSub', prev?.premioAvg, last?.premioAvg, 'pts Premio');
+}
+
+function renderDeltaKpi(valueId, subId, prevVal, curVal, unit){
+  const elVal = document.getElementById(valueId);
+  const elSub = document.getElementById(subId);
+  if(prevVal===undefined || curVal===undefined || prevVal===null || curVal===null){
+    elVal.textContent = '—'; elSub.textContent=''; return;
+  }
+  const diff = curVal - prevVal;
+  const pct = prevVal !== 0 ? (diff/Math.abs(prevVal))*100 : (diff===0?0:100);
+  const dir = diff > 0.001 ? 'up' : diff < -0.001 ? 'down' : 'flat';
+  const arrow = dir==='up' ? '▲' : dir==='down' ? '▼' : '—';
+  elVal.innerHTML = `<span class="delta ${dir}">${arrow} ${fmtNum(Math.abs(diff))}</span>`;
+  elSub.textContent = `${pct>=0?'+':''}${fmtNum(pct)}% ${unit} vs mes anterior`;
+}
+
+/* ============================================================
+   SECCIÓN 2: RALENTÍ
+   ============================================================ */
+function renderRalentiSection(rows, months){
+  // Top 5 litros por chofer+camion
+  const byEntity = {};
+  rows.forEach(r=>{
+    const key = r.chofer + '||' + r.camion;
+    if(!byEntity[key]) byEntity[key] = {chofer:r.chofer, camion:r.camion, litros:0};
+    byEntity[key].litros += r.ralentiLitros;
+  });
+  const top5 = Object.values(byEntity).sort((a,b)=>b.litros-a.litros).slice(0,5);
+
+  const ctxTop = document.getElementById('chartTopRalenti');
+  if(CHARTS.topRalenti) CHARTS.topRalenti.destroy();
+  CHARTS.topRalenti = new Chart(ctxTop, {
+    type:'bar',
+    data:{
+      labels: top5.map(t=>t.chofer),
+      datasets:[{
+        label:'Litros en ralentí', data: top5.map(t=>t.litros),
+        backgroundColor: css('--series-4'), borderRadius:4, maxBarThickness:28
+      }]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, tooltip: tooltipStyle() },
+      scales:{
+        x:{ grid:{color:css('--grid')}, ticks:{color:css('--text-muted')} },
+        y:{ grid:{display:false}, ticks:{color:css('--text-secondary')} }
+      }
+    }
+  });
+
+  const tbody = document.querySelector('#tableTopRalenti tbody');
+  tbody.innerHTML = top5.map((t,i)=>`<tr><td>${i+1}</td><td>${t.chofer}</td><td>${t.camion}</td><td>${fmtNum(t.litros)} L</td></tr>`).join('') || '<tr><td colspan="4">Sin datos</td></tr>';
+
+  // Horas reales vs permitidas por mes (flota o chofer según scope)
+  const driverFilter = SCOPE==='chofer' ? SCOPE_DRIVER : null;
+  const horasAgg = months.map(mo=>{
+    const subset = rows.filter(r => r.monthKey===mo.key && (!driverFilter || r.chofer===driverFilter));
+    const n = subset.length || 1;
+    return {
+      label: mo.label,
+      real: subset.reduce((a,r)=>a+r.ralentiHoras,0)/n,
+      permitido: subset.reduce((a,r)=>a+r.ralentiHorasPermitidas,0)/n
+    };
+  });
+
+  const ctxHoras = document.getElementById('chartRalentiHoras');
+  if(CHARTS.ralentiHoras) CHARTS.ralentiHoras.destroy();
+  CHARTS.ralentiHoras = new Chart(ctxHoras, {
+    type:'bar',
+    data:{
+      labels: horasAgg.map(a=>a.label),
+      datasets:[
+        { type:'bar', label:'Horas reales', data: horasAgg.map(a=>a.real), backgroundColor: css('--series-1'), borderRadius:4, maxBarThickness:26 },
+        { type:'line', label:'Horas permitidas', data: horasAgg.map(a=>a.permitido), borderColor: css('--critical'), borderDash:[6,4], borderWidth:2, pointRadius:3, fill:false }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ position:'top', labels:{color:css('--text-secondary'), boxWidth:12, font:{size:11}} },
+        tooltip: Object.assign(tooltipStyle(), {
+          callbacks:{ label: (ctx)=> `${ctx.dataset.label}: ${hoursToHM(ctx.parsed.y)}` }
+        })
+      },
+      scales:{
+        x:{ grid:{display:false}, ticks:{color:css('--text-muted')} },
+        y:{ grid:{color:css('--grid')}, ticks:{color:css('--text-muted'), callback:(v)=>hoursToHM(v)} }
+      }
+    }
+  });
+
+  // Evolución % ralentí promedio
+  const pctAgg = months.map(mo=>{
+    const subset = rows.filter(r => r.monthKey===mo.key && (!driverFilter || r.chofer===driverFilter));
+    const n = subset.length || 1;
+    return { label:mo.label, pct: subset.reduce((a,r)=>a+r.ralentiPct,0)/n };
+  });
+  const ctxPct = document.getElementById('chartRalentiPct');
+  if(CHARTS.ralentiPct) CHARTS.ralentiPct.destroy();
+  CHARTS.ralentiPct = new Chart(ctxPct, {
+    type:'line',
+    data:{
+      labels: pctAgg.map(a=>a.label),
+      datasets:[{
+        label:'% Ralentí promedio', data: pctAgg.map(a=>a.pct),
+        borderColor: css('--series-3'), backgroundColor: hexToRgba(css('--series-3'),.15),
+        borderWidth:2, pointRadius:4, fill:true, tension:.25
+      }]
+    },
+    options: baseLineOptions('% Ralentí', true)
+  });
+}
+
+/* ============================================================
+   SECCIÓN 3: EMBALAMIENTO
+   ============================================================ */
+function renderEmbalamientoSection(rows, months){
+  const driverFilter = SCOPE==='chofer' ? SCOPE_DRIVER : null;
+  const agg = months.map(mo=>{
+    const subset = rows.filter(r => r.monthKey===mo.key && (!driverFilter || r.chofer===driverFilter));
+    const n = subset.length || 1;
+    return { label:mo.label, pct: subset.reduce((a,r)=>a+r.embalamientoPct,0)/n };
+  });
+
+  const ctx = document.getElementById('chartEmbalamiento');
+  if(CHARTS.embalamiento) CHARTS.embalamiento.destroy();
+  CHARTS.embalamiento = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: agg.map(a=>a.label),
+      datasets:[
+        {
+          label:'% Embalamiento promedio', data: agg.map(a=>a.pct),
+          borderColor: css('--series-7'), backgroundColor: hexToRgba(css('--series-7'),.15),
+          borderWidth:2, pointRadius:4, fill:true, tension:.25
+        },
+        {
+          label:'Límite máximo permitido (0.5%)', data: agg.map(()=>CONFIG.EMBALAMIENTO_LIMITE),
+          borderColor: css('--critical'), borderDash:[6,4], borderWidth:2, pointRadius:0, fill:false
+        }
+      ]
+    },
+    options: baseLineOptions('% Embalamiento', true)
+  });
+}
+
+/* ============================================================
+   CHART OPTION HELPERS
+   ============================================================ */
+function baseLineOptions(yLabel, isPct=false){
+  return {
+    responsive:true, maintainAspectRatio:false,
+    interaction:{ mode:'index', intersect:false },
+    plugins:{
+      legend:{ position:'top', labels:{color:css('--text-secondary'), boxWidth:12, font:{size:11}} },
+      tooltip: Object.assign(tooltipStyle(), {
+        callbacks: isPct ? { label:(ctx)=> `${ctx.dataset.label}: ${fmtNum(ctx.parsed.y,2)}%` } : undefined
+      })
+    },
+    scales:{
+      x:{ grid:{display:false}, ticks:{color:css('--text-muted'), font:{size:11}} },
+      y:{
+        grid:{color:css('--grid')}, ticks:{color:css('--text-muted'), font:{size:11}, callback:(v)=> isPct? (Math.round(v*100)/100)+'%' : v},
+        title:{display:true, text:yLabel, color:css('--text-muted'), font:{size:11}}
+      }
+    }
+  };
+}
+function tooltipStyle(){
+  return {
+    backgroundColor: css('--surface-2'), titleColor: css('--text-primary'), bodyColor: css('--text-secondary'),
+    borderColor: css('--border'), borderWidth:1, padding:10, cornerRadius:8,
+    titleFont:{size:12, weight:'700'}, bodyFont:{size:12}
+  };
+}
+function hexToRgba(hex, alpha){
+  hex = hex.replace('#','').trim();
+  if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+  const r = parseInt(hex.substring(0,2),16), g = parseInt(hex.substring(2,4),16), b = parseInt(hex.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+</script>
+</body>
+</html>
